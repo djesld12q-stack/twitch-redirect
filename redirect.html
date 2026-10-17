@@ -45,7 +45,7 @@
       font-size: 14px;
       color: #fff;
       text-align: center;
-      min-height: 40px; /* Ensuring it has enough space */
+      min-height: 40px;
     }
 
     button {
@@ -64,10 +64,6 @@
       background-color: #7a32db;
     }
 
-    .spacer {
-      margin-top: 10px;
-    }
-
     .hint {
       margin-top: 14px;
       font-size: 13px;
@@ -80,10 +76,10 @@
 <body>
 
   <div class="container" id="card">
-    <h2 id="title">Twitch Token Retrieved</h2>
-    <p id="text">Copy the token below and paste it into the plugin settings manually:</p>
-    <div id="tokenBox">Loading...</div>
-    <button id="copyBtn" onclick="copyToken()">Copy Token</button>
+    <h2 id="title">&nbsp;</h2>
+    <p id="text"></p>
+    <div id="tokenBox" hidden></div>
+    <button id="copyBtn" onclick="copyToken()" hidden>Скопіювати токен</button>
     <div class="hint" id="hint" hidden></div>
   </div>
 
@@ -98,45 +94,57 @@
     function copyToken() {
       const token = $('tokenBox').textContent;
       navigator.clipboard.writeText(token).then(() => {
-        alert('Token copied to clipboard!');
+        alert('Токен скопійовано!');
       });
     }
 
-    function showMessage(title, text, opts = {}) {
+    function show(title, text, opts = {}) {
       $('title').textContent = title;
       $('text').textContent = text;
-      $('tokenBox').hidden = true;
-      $('copyBtn').hidden = true;
       $('card').classList.toggle('error', !!opts.error);
-      if (opts.hint) {
-        $('hint').textContent = opts.hint;
-        $('hint').hidden = false;
-      }
+
+      const hasToken = !!opts.token;
+      $('tokenBox').hidden = !hasToken;
+      $('copyBtn').hidden = !hasToken;
+      if (hasToken) $('tokenBox').textContent = opts.token;
+
+      $('hint').hidden = !opts.hint;
+      if (opts.hint) $('hint').textContent = opts.hint;
     }
 
     function init() {
-      // Розширення Twitch Multi-View бере токен саме, тому показувати його не потрібно.
-      // Воно ставить цю позначку до запуску скриптів сторінки й саме закриває вкладку.
-      const ext = document.documentElement.dataset.mvAuth;
-      if (ext === 'ok') {
-        showMessage('Готово ✓', 'Авторизація успішна. Повертаємось у Twitch Multi-View…');
+      // 1. Вхід веде розширення Twitch Multi-View: воно саме забирає токен
+      //    (і прибирає його з адреси), тож тут просто підтверджуємо успіх.
+      if (document.documentElement.dataset.mvAuth === 'ok') {
+        show('Авторизовано ✓', 'Twitch Multi-View активовано. Повертаємось назад…');
         setTimeout(() => window.close(), 1500); // запасний варіант, якщо вкладку не закрили
         return;
       }
 
+      // 2. Twitch повернув помилку.
       const error = get('error');
       if (error) {
         const description = get('error_description') || '';
         const hint = error === 'redirect_mismatch'
           ? 'Адреса цієї сторінки має бути точно додана в OAuth Redirect URLs застосунку на dev.twitch.tv.'
           : '';
-        showMessage('Помилка авторизації', description ? `${error}: ${description}` : error, { error: true, hint });
+        show('Помилка авторизації', description ? `${error}: ${description}` : error, { error: true, hint });
         return;
       }
 
-      // Звичайний режим для плагіна: показуємо токен і даємо його скопіювати.
+      // 3. Токен є в адресі, а розширення його не забрало (наприклад, вхід для плагіна):
+      //    показуємо токен, щоб його можна було скопіювати вручну.
       const token = hashParams.get('access_token');
-      $('tokenBox').textContent = token || 'No token found in URL';
+      if (token) {
+        show('Токен отримано',
+          'Скопіюйте токен нижче та вставте його в налаштування плагіна вручну:',
+          { token });
+        return;
+      }
+
+      // 4. Токена в адресі немає (сторінку відкрито напряму або оновлено після входу).
+      show('Активовано ✓',
+        'Редірект працює. Якщо ви щойно входили через Twitch Multi-View — авторизацію завершено, вкладку можна закрити.');
     }
 
     init();
