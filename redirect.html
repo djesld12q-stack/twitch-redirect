@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="uk">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Twitch Token Redirect</title>
   <style>
     body {
@@ -28,6 +29,10 @@
 
     h2 {
       color: #4CAF50; /* Green for success */
+    }
+
+    .container.error h2 {
+      color: #ff5252; /* Red for errors */
     }
 
     #tokenBox {
@@ -62,33 +67,79 @@
     .spacer {
       margin-top: 10px;
     }
+
+    .hint {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #999;
+    }
+
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <h2>Twitch Token Retrieved</h2>
-    <p>Copy the token below and paste it into the plugin settings manually:</p>
+  <div class="container" id="card">
+    <h2 id="title">Twitch Token Retrieved</h2>
+    <p id="text">Copy the token below and paste it into the plugin settings manually:</p>
     <div id="tokenBox">Loading...</div>
-    <button onclick="copyToken()">Copy Token</button>
+    <button id="copyBtn" onclick="copyToken()">Copy Token</button>
+    <div class="hint" id="hint" hidden></div>
   </div>
 
   <script>
-    function extractTokenFromHash() {
-      const hash = window.location.hash.substring(1); // remove #
-      const params = new URLSearchParams(hash);
-      return params.get('access_token');
-    }
+    const $ = id => document.getElementById(id);
+
+    // Токен приходить у #hash, помилки Twitch — або в ?query, або в #hash.
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const queryParams = new URLSearchParams(window.location.search);
+    const get = key => hashParams.get(key) || queryParams.get(key);
 
     function copyToken() {
-      const token = document.getElementById('tokenBox').textContent;
+      const token = $('tokenBox').textContent;
       navigator.clipboard.writeText(token).then(() => {
         alert('Token copied to clipboard!');
       });
     }
 
-    const token = extractTokenFromHash();
-    document.getElementById('tokenBox').textContent = token || 'No token found in URL';
+    function showMessage(title, text, opts = {}) {
+      $('title').textContent = title;
+      $('text').textContent = text;
+      $('tokenBox').hidden = true;
+      $('copyBtn').hidden = true;
+      $('card').classList.toggle('error', !!opts.error);
+      if (opts.hint) {
+        $('hint').textContent = opts.hint;
+        $('hint').hidden = false;
+      }
+    }
+
+    function init() {
+      // Розширення Twitch Multi-View бере токен саме, тому показувати його не потрібно.
+      // Воно ставить цю позначку до запуску скриптів сторінки й саме закриває вкладку.
+      const ext = document.documentElement.dataset.mvAuth;
+      if (ext === 'ok') {
+        showMessage('Готово ✓', 'Авторизація успішна. Повертаємось у Twitch Multi-View…');
+        setTimeout(() => window.close(), 1500); // запасний варіант, якщо вкладку не закрили
+        return;
+      }
+
+      const error = get('error');
+      if (error) {
+        const description = get('error_description') || '';
+        const hint = error === 'redirect_mismatch'
+          ? 'Адреса цієї сторінки має бути точно додана в OAuth Redirect URLs застосунку на dev.twitch.tv.'
+          : '';
+        showMessage('Помилка авторизації', description ? `${error}: ${description}` : error, { error: true, hint });
+        return;
+      }
+
+      // Звичайний режим для плагіна: показуємо токен і даємо його скопіювати.
+      const token = hashParams.get('access_token');
+      $('tokenBox').textContent = token || 'No token found in URL';
+    }
+
+    init();
   </script>
 </body>
 </html>
